@@ -15,7 +15,7 @@ import { TaxonomyData } from '../data/types';
 
 type TaxonomyCardFields = Pick<
   TaxonomyData,
-  'id' | 'name' | 'description' | 'readOnly' | 'tagsCount' | 'canChangeTaxonomy' | 'canDeleteTaxonomy'
+  'id' | 'name' | 'description' | 'readOnly' | 'tagsCount' | 'canChangeTaxonomy' | 'canDeleteTaxonomy' | 'canTagObject'
 >;
 
 /** The data of the taxonomy shown on a taxonomy card */
@@ -37,13 +37,13 @@ export const TaxonomyCard = ({ className = '', original }: TaxonomyCardProps) =>
     readOnly,
     orgsCount,
     taxonomyType,
-    canChangeTaxonomy,
+    canTagObject,
   } = original;
 
   const intl = useIntl();
   const navigate = useNavigate();
 
-  const showApplyCompetencies = canChangeTaxonomy && isCompetencyTaxonomy(original);
+  const showApplyCompetencies = canTagObject && isCompetencyTaxonomy(original);
 
   return (
     <Card
