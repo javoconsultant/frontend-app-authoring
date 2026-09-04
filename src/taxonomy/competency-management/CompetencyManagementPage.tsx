@@ -8,13 +8,14 @@ import Loading from '@src/generic/Loading';
 import SubHeader from '@src/generic/sub-header/SubHeader';
 import getPageHeadTitle from '@src/generic/utils';
 import taxonomyMessages from '../messages';
+import { ImportCompetencyFrameworkButton } from './ImportCompetencyFrameworkButton';
 import { useTaxonomyDetails } from '../data/apiHooks';
 
 /**
  * Page where competencies of a taxonomy are managed and applied to course content.
  *
- * The page is a placeholder for now: it carries the breadcrumb and the title, the same
- * way the taxonomy detail page does. The competency tree and its actions are added by a
+ * The page is a placeholder for now: it carries the breadcrumb, the title and the import action,
+ * the same way the taxonomy detail page does. The competency tree and its actions are added by a
  * later ticket.
  */
 export const CompetencyManagementPage = () => {
@@ -45,13 +46,17 @@ export const CompetencyManagementPage = () => {
         <Container size="xl">
           <Breadcrumb
             links={[
-              { label: intl.formatMessage(taxonomyMessages.headerTitle), to: '/taxonomies/' },
+              {
+                label: intl.formatMessage(taxonomyMessages.headerTitle),
+                to: '/taxonomies/',
+              },
             ]}
             activeLabel={taxonomy.name}
             linkAs={Link}
           />
           <SubHeader
             title={taxonomy.name}
+            headerActions={<ImportCompetencyFrameworkButton />}
             hideBorder
           />
         </Container>
