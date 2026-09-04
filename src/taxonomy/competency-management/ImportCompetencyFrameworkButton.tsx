@@ -28,6 +28,7 @@ export const ImportCompetencyFrameworkButton = () => {
         />
       )}
       <Button
+        className="text-nowrap"
         iconBefore={CompetencyIcon}
         onClick={importModalOpen}
         data-testid="import-competency-framework-button"
