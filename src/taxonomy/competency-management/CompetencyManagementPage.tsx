@@ -4,21 +4,28 @@ import {
   Container,
 } from '@openedx/paragon';
 import { Helmet } from 'react-helmet';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import ConnectionErrorAlert from '@src/generic/ConnectionErrorAlert';
 import Loading from '@src/generic/Loading';
 import getPageHeadTitle from '@src/generic/utils';
 import SubHeader from '@src/generic/sub-header/SubHeader';
 import taxonomyMessages from '@src/taxonomy/messages';
-import { useTaxonomyDetails } from '@src/taxonomy/data/apiHooks';
+import { useTaxonomyDetails, useTaxonomyList } from '@src/taxonomy/data/apiHooks';
 import CompetencyTree from './CompetencyTree';
 import messages from './messages';
+import { ImportTagsWizardButton } from '../import-tags';
+import CompetencyIcon from '@src/generic/CompetencyIcon';
+import { TaxonomyType } from '../data/constants';
 
 const CompetencyManagementPage = () => {
   const intl = useIntl();
+  const navigate = useNavigate();
   const { taxonomyId: taxonomyIdString } = useParams();
   const taxonomyId = Number(taxonomyIdString);
+
+  const { data: taxonomyListData } = useTaxonomyList();
+  const canAddTaxonomy = taxonomyListData?.canAddTaxonomy ?? false;
 
   const {
     data: taxonomy,
@@ -50,6 +57,19 @@ const CompetencyManagementPage = () => {
           />
           <SubHeader
             title={taxonomy.name}
+            headerActions={canAddTaxonomy ?
+              (
+                <ImportTagsWizardButton
+                  className="text-nowrap"
+                  iconBefore={CompetencyIcon}
+                  data-testid="import-competency-framework-button"
+                  defaultTaxonomyType={TaxonomyType.Competency}
+                  onImportSuccess={(newTaxonomy) => navigate(`/taxonomy/${newTaxonomy.id}/competencies`)}
+                >
+                  {intl.formatMessage(messages.importCompetencyFrameworkButton)}
+                </ImportTagsWizardButton>
+              ) :
+              null}
             hideBorder
           />
         </Container>
