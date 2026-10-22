@@ -179,33 +179,59 @@
     justify-content: space-between;
   }
 
+  &__subsection-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    font: inherit;
+    text-align: left;
+    justify-content: flex-start;
+
+    &:disabled {
+      opacity: 1;
+      color: inherit;
+    }
+  }
+
   &__subsection-actions {
     display: flex;
     align-items: center;
     flex-shrink: 0;
+    gap: 6px;
   }
 
-  // Same `--pgn-color-badge-*` override as `.badge-info` in
-  // CompetencyTree.scss (this app's theme resolves `variant="info"` to
-  // teal); redeclared here since this badge lives in a different DOM subtree.
   .badge-info {
     --pgn-color-badge-bg-info: #006DAA;
-    --pgn-color-badge-text-info: #FFFFFF;
+    --pgn-color-badge-text-info: var(--pgn-color-white);
   }
 
   &__subsection-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    margin-right: 6px;
+    padding: 2px 10px 2px 6px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+  }
+
+  &__subsection-badge--blocked {
+    --pgn-color-badge-bg-secondary: var(--pgn-color-gray-500);
+    --pgn-color-badge-text-secondary: var(--pgn-color-white);
+  }
+
+  &__subsection-badge-tooltip-wrapper {
+    display: inline-flex;
+    border-radius: 50rem;
   }
 
   &__subsection-associated-icon,
   &__subsection-select-icon {
     color: #006DAA;
   }
+}
 
-  &__subsection-associated-icon {
-    margin-right: 6px;
-  }
+.course-search-browse-blocked-tooltip {
+  --pgn-size-tooltip-max-width: 400px;
 }

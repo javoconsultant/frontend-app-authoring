@@ -11,10 +11,12 @@ import {
 } from '@src/testUtils';
 import { CompetencyAssociationsProvider, useCompetencyAssociations } from './CompetencyAssociationsContext';
 import { apiUrls } from './data/api';
+import { competencyQueryKeys } from './data/apiHooks';
 import type { CompetencyCriteriaTree } from './data/types';
 
 let axiosMock: ReturnType<typeof initializeMocks>['axiosMock'];
 let mockShowToast: ReturnType<typeof initializeMocks>['mockShowToast'];
+let queryClient: ReturnType<typeof initializeMocks>['queryClient'];
 
 const tagId = 42;
 const courseA = 'course-v1:OrgX+CS101+2024';
@@ -22,6 +24,7 @@ const courseB = 'course-v1:OrgX+CS102+2024';
 const courseOther = 'course-v1:OrgX+CS999+2024';
 
 const groupsUrl = apiUrls.competencyCriteriaGroups(tagId);
+const blockedCoursesUrl = apiUrls.competencyBlockedCourses(tagId);
 const profileUrl = apiUrls.defaultCompetencyRuleProfile();
 const createUrl = apiUrls.createCompetencyCriterion(tagId);
 const updateGroupOperatorUrl = apiUrls.updateCompetencyCriteriaGroup(tagId, 10);
@@ -304,6 +307,8 @@ const TestConsumer = ({ reportedCourseKeys = defaultReportedCourseKeys }: TestCo
       <div data-testid="accessible-course-group-ids">
         {ctx.accessibleCourseGroups.map((group) => group.courseKey).join(',')}
       </div>
+      <div data-testid="conflict-course-a">{ctx.conflictingCompetencyName(courseA) ?? 'none'}</div>
+      <div data-testid="conflict-course-b">{ctx.conflictingCompetencyName(courseB) ?? 'none'}</div>
       <button type="button" onClick={() => ctx.focusGroup(999)}>focus-999</button>
       <button type="button" onClick={() => ctx.focusGroup(10)}>focus-group-10</button>
       <button type="button" onClick={() => ctx.focusGroup(11)}>focus-group-11</button>
@@ -362,17 +367,19 @@ const TestConsumer = ({ reportedCourseKeys = defaultReportedCourseKeys }: TestCo
   );
 };
 
-const providerTree = (props: TestConsumerProps = {}) => (
-  <CompetencyAssociationsProvider tagId={tagId} competencyName="Competency" competencyExternalId="CCRS-1.3">
+type ProviderTreeProps = TestConsumerProps & { providerTagId?: number; };
+
+const providerTree = ({ providerTagId = tagId, ...props }: ProviderTreeProps = {}) => (
+  <CompetencyAssociationsProvider tagId={providerTagId} competencyName="Competency" competencyExternalId="CCRS-1.3">
     <TestConsumer {...props} />
   </CompetencyAssociationsProvider>
 );
 
-const renderProvider = (props: TestConsumerProps = {}) => render(providerTree(props));
+const renderProvider = (props: ProviderTreeProps = {}) => render(providerTree(props));
 
 describe('CompetencyAssociationsProvider', () => {
   beforeEach(() => {
-    ({ axiosMock, mockShowToast } = initializeMocks());
+    ({ axiosMock, mockShowToast, queryClient } = initializeMocks());
   });
 
   describe('initial focus', () => {
@@ -771,6 +778,94 @@ describe('CompetencyAssociationsProvider', () => {
       rerender(providerTree({ reportedCourseKeys: [courseOther] }));
 
       expect(screen.getByTestId('focus')).toHaveTextContent(`{"groupId":10,"ruleKey":"${defaultRuleKey}"}`);
+    });
+  });
+
+  describe('blocked courses (#797)', () => {
+    const blockedCoursesBody = (rows: { course_key: string; conflicting_tag_value: string; }[]) => ({
+      count: rows.length,
+      next: null,
+      previous: null,
+      results: rows.map((row) => ({ ...row, conflicting_tag_id: 7 })),
+    });
+    const blockedCoursesRequests = (url = blockedCoursesUrl) => axiosMock.history.get.filter((req) => req.url === url);
+
+    beforeEach(() => {
+      axiosMock.onGet(groupsUrl).reply(200, singleGroupResponse);
+      axiosMock.onGet(profileUrl).reply(200, profileResponse);
+      axiosMock.onGet(getCourseOutlineIndexApiUrl(courseA)).reply(200, outlineFixture);
+    });
+
+    it('names the related competency for a blocked listed course, and nothing for the others', async () => {
+      axiosMock.onGet(blockedCoursesUrl).reply(
+        200,
+        blockedCoursesBody([
+          { course_key: courseA, conflicting_tag_value: 'Inference' },
+        ]),
+      );
+      renderProvider();
+
+      await waitFor(() => expect(screen.getByTestId('conflict-course-a')).toHaveTextContent('Inference'));
+      expect(screen.getByTestId('conflict-course-b')).toHaveTextContent('none');
+      expect(blockedCoursesRequests()[0].params).toEqual({ course_keys: defaultReportedCourseKeys.join(',') });
+    });
+
+    it('names nothing while the lookup is in flight', async () => {
+      axiosMock.onGet(blockedCoursesUrl).reply(() => new Promise(() => {}));
+      renderProvider();
+
+      await waitFor(() => expect(blockedCoursesRequests()).toHaveLength(1));
+      expect(screen.getByTestId('conflict-course-a')).toHaveTextContent('none');
+    });
+
+    it.each([404, 500])('names nothing, and shows no toast, when the lookup fails with %s', async (status) => {
+      axiosMock.onGet(blockedCoursesUrl).reply(status);
+      renderProvider();
+
+      await waitFor(() => (
+        expect(
+          queryClient.getQueryState(
+            competencyQueryKeys.competencyBlockedCourses(tagId, defaultReportedCourseKeys),
+          )?.status,
+        ).toEqual('error')
+      ));
+      expect(screen.getByTestId('conflict-course-a')).toHaveTextContent('none');
+      expect(mockShowToast).not.toHaveBeenCalled();
+    });
+
+    it('re-scopes to newly reported course keys, keeping no previous conflict while they load', async () => {
+      axiosMock.onGet(blockedCoursesUrl).reply((config) => (
+        config.params.course_keys.includes(courseA)
+          ? [200, blockedCoursesBody([{ course_key: courseA, conflicting_tag_value: 'Inference' }])]
+          : new Promise(() => {})
+      ));
+      const { rerender } = renderProvider();
+      await waitFor(() => expect(screen.getByTestId('conflict-course-a')).toHaveTextContent('Inference'));
+
+      rerender(providerTree({ reportedCourseKeys: [courseOther] }));
+
+      await waitFor(() => expect(blockedCoursesRequests()).toHaveLength(2));
+      expect(blockedCoursesRequests()[1].params).toEqual({ course_keys: courseOther });
+      expect(screen.getByTestId('conflict-course-a')).toHaveTextContent('none');
+    });
+
+    it('fetches again for a newly selected competency, keeping no previous conflict while it loads', async () => {
+      const otherTagId = tagId + 1;
+      axiosMock.onGet(apiUrls.competencyCriteriaGroups(otherTagId)).reply(200, noGroupsResponse);
+      axiosMock.onGet(blockedCoursesUrl).reply(
+        200,
+        blockedCoursesBody([
+          { course_key: courseA, conflicting_tag_value: 'Inference' },
+        ]),
+      );
+      axiosMock.onGet(apiUrls.competencyBlockedCourses(otherTagId)).reply(() => new Promise(() => {}));
+      const { rerender } = renderProvider();
+      await waitFor(() => expect(screen.getByTestId('conflict-course-a')).toHaveTextContent('Inference'));
+
+      rerender(providerTree({ providerTagId: otherTagId }));
+
+      await waitFor(() => expect(blockedCoursesRequests(apiUrls.competencyBlockedCourses(otherTagId))).toHaveLength(1));
+      expect(screen.getByTestId('conflict-course-a')).toHaveTextContent('none');
     });
   });
 

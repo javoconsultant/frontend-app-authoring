@@ -19,6 +19,7 @@ import { useCourseOutlineIndex } from '@src/course-outline/data';
 import type { XBlock } from '@src/data/types';
 import { LoadingSpinner } from '@src/generic/Loading';
 import { useCompetencyAssociations } from '../CompetencyAssociationsContext';
+import DisabledControlTooltip from '../DisabledControlTooltip';
 import rootMessages from '../messages';
 import messages from './messages';
 
@@ -34,14 +35,10 @@ interface SubsectionRowProps {
 /**
  * One row for a single graded subsection.
  *
- * Renders a button that calls `associateSubsection` when clicked, unless
- * `canEditCourse(courseId)` is false or the association data (`index`,
- * `systemDefaultProfile`) isn't loaded yet, in which case it renders the same
- * content as a non-interactive `div`. The already-associated badge and
- * marker icon show regardless of `canEditCourse`, so a view-only course
- * still shows what's associated. Re-clicking an
- * already-associated row hits the duplicate guard inside
- * `associateSubsection` (an informational toast), not a failed request.
+ * Clicking the row associates the subsection with the competency. The row is
+ * non-interactive when the course can't be edited, association data is still
+ * loading, or another competency blocks the course. The associated state is
+ * always shown, even when the row can't be clicked.
  */
 const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
   const intl = useIntl();
@@ -50,6 +47,7 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
     associateSubsection,
     canEditCourse,
     competencyExternalId,
+    conflictingCompetencyName,
     index,
     systemDefaultProfile,
     isDeletingGroup,
@@ -59,38 +57,73 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
   // (declared on the shared `XBlockBase` type but always `undefined` here).
   const isAssociated = associatedObjectIds.has(subsection.id);
   const canSelect = canEditCourse(courseId) && !!index && !!systemDefaultProfile;
+  const conflictingCompetency = conflictingCompetencyName(courseId);
 
   const rowClassName = 'course-search-browse__subsection d-flex align-items-center justify-content-between';
+  const competencyIdLabel = competencyExternalId && (
+    <span className="sr-only">
+      {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
+    </span>
+  );
+  const associatedIcon = isAssociated && (
+    <Icon
+      src={CheckCircle}
+      size="xs"
+      className="course-search-browse__subsection-associated-icon"
+      aria-hidden="true"
+    />
+  );
+
+  if (canSelect && conflictingCompetency !== undefined) {
+    return (
+      <div className={`${rowClassName} course-search-browse__subsection--blocked`} data-associated={isAssociated}>
+        <Button variant="tertiary" type="button" disabled className="course-search-browse__subsection-title">
+          {subsection.displayName}
+        </Button>
+        <span className="course-search-browse__subsection-actions">
+          <DisabledControlTooltip
+            tooltip={intl.formatMessage(messages.hierarchyConflictTooltip, { competencyName: conflictingCompetency })}
+            placement="left"
+            variant="light"
+            className="course-search-browse__subsection-badge-tooltip-wrapper"
+            tooltipClassName="course-search-browse-blocked-tooltip"
+          >
+            {competencyIdLabel}
+            <Badge
+              variant="secondary"
+              pill
+              className="course-search-browse__subsection-badge course-search-browse__subsection-badge--blocked"
+              aria-hidden="true"
+            >
+              <Icon src={AdsClick} size="sm" />
+              {competencyExternalId}
+            </Badge>
+          </DisabledControlTooltip>
+          {associatedIcon}
+        </span>
+      </div>
+    );
+  }
+
   const rowContent = (
     <>
       <span>{subsection.displayName}</span>
       <span className="course-search-browse__subsection-actions">
-        {isAssociated && (
+        {isAssociated && competencyExternalId && (
           <>
-            {competencyExternalId && (
-              <>
-                <span className="sr-only">
-                  {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
-                </span>
-                <Badge
-                  variant="info"
-                  pill
-                  className="course-search-browse__subsection-badge"
-                  aria-hidden="true"
-                >
-                  <Icon src={AdsClick} size="xs" />
-                  {competencyExternalId}
-                </Badge>
-              </>
-            )}
-            <Icon
-              src={CheckCircle}
-              size="xs"
-              className="course-search-browse__subsection-associated-icon"
+            {competencyIdLabel}
+            <Badge
+              variant="info"
+              pill
+              className="course-search-browse__subsection-badge"
               aria-hidden="true"
-            />
+            >
+              <Icon src={AdsClick} size="sm" />
+              {competencyExternalId}
+            </Badge>
           </>
         )}
+        {associatedIcon}
         {canSelect && (
           <Icon
             src={AddCircleOutline}
