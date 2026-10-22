@@ -14,6 +14,7 @@ import type { XBlock } from '@src/data/types';
 import CompetencyIcon from '@src/generic/CompetencyIcon';
 import { LoadingSpinner } from '@src/generic/Loading';
 import { useCompetencyAssociations } from '../CompetencyAssociationsContext';
+import DisabledControlTooltip from '../DisabledControlTooltip';
 import rootMessages from '../messages';
 import messages from './messages';
 
@@ -29,15 +30,13 @@ interface SubsectionRowProps {
 /**
  * One row for a single graded subsection.
  *
- * Renders a button that calls `associateSubsection` when clicked, unless
- * `canEditCourse(courseId)` is false or the association data (`index`,
- * `systemDefaultProfile`) isn't loaded yet, in which case it renders the same
- * content as a non-interactive `div`. The already-associated pill
- * shows regardless of `canEditCourse`, so a view-only course still shows
- * what's associated; its cancel icon is
- * decorative (removal is out of scope). Re-clicking an already-associated
- * row hits the duplicate guard inside `associateSubsection` (an
- * informational toast), not a failed request.
+ * Clicking the row associates the subsection with the competency. The row is
+ * non-interactive when the course can't be edited, association data is still
+ * loading, or another competency blocks the course. The associated pill is
+ * always shown, even when the row can't be clicked; its cancel icon is
+ * decorative (removal is out of scope). Re-clicking an already-associated row
+ * hits the duplicate guard inside `associateSubsection` (an informational
+ * toast), not a failed request.
  */
 const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
   const intl = useIntl();
@@ -46,6 +45,7 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
     associateSubsection,
     canEditCourse,
     competencyExternalId,
+    conflictingCompetencyName,
     index,
     systemDefaultProfile,
     isDeletingGroup,
@@ -55,28 +55,57 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
   // (declared on the shared `XBlockBase` type but always `undefined` here).
   const isAssociated = associatedObjectIds.has(subsection.id);
   const canSelect = canEditCourse(courseId) && !!index && !!systemDefaultProfile;
+  const conflictingCompetency = conflictingCompetencyName(courseId);
 
   const rowClassName = 'course-search-browse__subsection d-flex align-items-center justify-content-between';
+  const pillClassName = `course-search-browse__subsection-pill course-search-browse__subsection-pill--${
+    isAssociated ? 'applied' : 'available'
+  }`;
+  const competencyIdLabel = competencyExternalId && (
+    <span className="sr-only">
+      {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
+    </span>
+  );
+  const competencyId = (
+    <>
+      <CompetencyIcon aria-hidden="true" />
+      {competencyExternalId && (
+        <span className="course-search-browse__subsection-pill-id" aria-hidden="true">
+          {competencyExternalId}
+        </span>
+      )}
+    </>
+  );
+
+  if (canSelect && conflictingCompetency !== undefined) {
+    return (
+      <div className={`${rowClassName} course-search-browse__subsection--blocked`} data-associated={isAssociated}>
+        <Button variant="tertiary" type="button" disabled className="course-search-browse__subsection-title">
+          {subsection.displayName}
+        </Button>
+        <DisabledControlTooltip
+          tooltip={intl.formatMessage(messages.hierarchyConflictTooltip, { competencyName: conflictingCompetency })}
+          placement="left"
+          variant="light"
+          className="course-search-browse__subsection-pill-tooltip-wrapper"
+          tooltipClassName="course-search-browse-blocked-tooltip"
+        >
+          <span className={`${pillClassName} course-search-browse__subsection-pill--blocked`}>
+            {competencyIdLabel}
+            {competencyId}
+          </span>
+        </DisabledControlTooltip>
+      </div>
+    );
+  }
+
   const rowContent = (
     <>
       <span>{subsection.displayName}</span>
       {(isAssociated || canSelect) && (
-        <span
-          className={`course-search-browse__subsection-pill course-search-browse__subsection-pill--${
-            isAssociated ? 'applied' : 'available'
-          }`}
-        >
-          {isAssociated && competencyExternalId && (
-            <span className="sr-only">
-              {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
-            </span>
-          )}
-          <CompetencyIcon aria-hidden="true" />
-          {competencyExternalId && (
-            <span className="course-search-browse__subsection-pill-id" aria-hidden="true">
-              {competencyExternalId}
-            </span>
-          )}
+        <span className={pillClassName}>
+          {isAssociated && competencyIdLabel}
+          {competencyId}
           <span className="course-search-browse__subsection-pill-divider" aria-hidden="true" />
           <Icon
             src={isAssociated ? Cancel : AddCircle}

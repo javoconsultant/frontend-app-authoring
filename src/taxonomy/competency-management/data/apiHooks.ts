@@ -36,6 +36,11 @@ export const competencyQueryKeys = {
     'criteriaGroups',
     ...(courseKeys ? [courseKeys] : []),
   ],
+  competencyBlockedCourses: (tagId: number | undefined, courseKeys?: string[]) => [
+    ...competencyQueryKeys.competency(tagId),
+    'blockedCourses',
+    ...(courseKeys ? [courseKeys] : []),
+  ],
   /** The studio-wide default rule profile - not scoped to any one competency. */
   defaultRuleProfile: () => [...competencyQueryKeys.all, 'defaultRuleProfile'],
 } satisfies Record<
@@ -55,6 +60,17 @@ export const useCompetencyCriteriaGroups = (tagId: number | undefined, courseKey
     queryFn: tagId !== undefined && courseKeys !== undefined
       ? () => api.getCompetencyCriteriaGroups(tagId, courseKeys)
       : skipToken,
+  })
+);
+
+/** Load which of the listed courses a parent or child competency already claims .*/
+export const useCompetencyBlockedCourses = (tagId: number | undefined, courseKeys: string[] | undefined) => (
+  useQuery({
+    queryKey: competencyQueryKeys.competencyBlockedCourses(tagId, courseKeys),
+    queryFn: tagId !== undefined && courseKeys?.length
+      ? () => api.getCompetencyBlockedCourses(tagId, courseKeys)
+      : skipToken,
+    gcTime: 0,
   })
 );
 
