@@ -198,3 +198,9 @@ export interface UpdateCompetencyCriteriaRulePayload {
   rule_type_override: string;
   rule_payload_override: GradeRulePayload;
 }
+
+export interface CompetencyBlockedCourse {
+  courseKey: string;
+  conflictingTagId: number;
+  conflictingTagValue: string;
+}

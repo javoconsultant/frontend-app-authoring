@@ -350,4 +350,129 @@ describe('<CourseOutlineSubtree />', () => {
 
     expect(screen.getByRole('button', { name: 'Subsection 1A (graded)' })).toBeDisabled();
   });
+
+  describe('in a course blocked by a related competency (#797)', () => {
+    const otherCourseId = 'course-v1:OrgX+CS999+2024';
+    const conflictTooltip = 'Already associated with Critical Thinking in this course';
+    const blockedIn = (blockedCourseId: string) => (id: string) => (
+      id === blockedCourseId ? 'Critical Thinking' : undefined
+    );
+    const rowBoxOf = (element: HTMLElement) => element.closest('.course-search-browse__subsection') as HTMLElement;
+    // A blocked row's tooltip hangs off its focusable badge wrapper, beside
+    // (not around) the disabled title button.
+    const tooltipWrapperOf = (element: HTMLElement) => rowBoxOf(element).querySelector('span[tabindex="0"]');
+
+    it('disables every graded subsection and names the conflicting competency in a tooltip', async () => {
+      const user = userEvent.setup();
+      axiosMock.onGet(outlineApiUrl).reply(200, mixedOutline);
+      renderSubtree({ conflictingCompetencyName: blockedIn(courseId) });
+
+      const expandButtons = await screen.findAllByRole('button', { name: 'Expand' });
+      await user.click(expandButtons[0]);
+      await user.click(screen.getByRole('button', { name: 'Expand' }));
+
+      const rowA = screen.getByRole('button', { name: 'Subsection 1A (graded)' });
+      expect(rowA).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Subsection 2A (graded)' })).toBeDisabled();
+      const wrapper = tooltipWrapperOf(rowA)!;
+      await user.hover(wrapper);
+      const tooltip = await screen.findByText(conflictTooltip);
+      expect(wrapper).toHaveAttribute('aria-describedby', tooltip.closest('[role="tooltip"]')!.id);
+    });
+
+    it('disables an already-associated row in a blocked course too, keeping its marking', async () => {
+      const user = userEvent.setup();
+      axiosMock.onGet(outlineApiUrl).reply(200, mixedOutline);
+      renderSubtree({ associatedObjectIds: new Set(['sub-1a']), conflictingCompetencyName: blockedIn(courseId) });
+
+      await user.click((await screen.findAllByRole('button', { name: 'Expand' }))[0]);
+
+      const row = screen.getByRole('button', { name: 'Subsection 1A (graded)' });
+      expect(row).toBeDisabled();
+      expect(rowBoxOf(row)).toHaveAttribute('data-associated', 'true');
+    });
+
+    it('shows the competency ID in the blocked badge, without the select icon', async () => {
+      const user = userEvent.setup();
+      axiosMock.onGet(outlineApiUrl).reply(200, mixedOutline);
+      renderSubtree({ competencyExternalId: 'EXT-042', conflictingCompetencyName: blockedIn(courseId) });
+
+      await user.click((await screen.findAllByRole('button', { name: 'Expand' }))[0]);
+
+      const row = screen.getByRole('button', { name: 'Subsection 1A (graded)' });
+      const wrapper = tooltipWrapperOf(row) as HTMLElement;
+      expect(within(wrapper).getByText('EXT-042')).toHaveAttribute('aria-hidden', 'true');
+      expect(within(wrapper).getByText('Competency ID: EXT-042')).toBeInTheDocument();
+      expect(rowBoxOf(row).querySelector('.course-search-browse__subsection-select-icon')).toBeNull();
+    });
+
+    it('leaves rows enabled, with no tooltip, when only a different course is blocked', async () => {
+      const user = userEvent.setup();
+      axiosMock.onGet(outlineApiUrl).reply(200, mixedOutline);
+      renderSubtree({ conflictingCompetencyName: blockedIn(otherCourseId) });
+
+      await user.click((await screen.findAllByRole('button', { name: 'Expand' }))[0]);
+
+      const row = screen.getByRole('button', { name: 'Subsection 1A (graded)' });
+      expect(row).toBeEnabled();
+      expect(tooltipWrapperOf(row)).toBeNull();
+    });
+
+    it('keeps an already-associated row marked and enabled, unlike a blocked course\'s row', async () => {
+      const user = userEvent.setup();
+      axiosMock.onGet(outlineApiUrl).reply(200, partiallyGradedOutline);
+      axiosMock.onGet(getCourseOutlineIndexApiUrl(otherCourseId)).reply(
+        200,
+        buildOutlineIndex({
+          sections: [{
+            id: 'section-blocked',
+            displayName: 'Blocked Section',
+            children: [{ id: 'sub-blocked', displayName: 'Blocked Subsection', overrides: { graded: true } }],
+          }],
+        }),
+      );
+      render(
+        <MockCompetencyAssociationsProvider
+          value={{
+            index: loadedIndex,
+            systemDefaultProfile: loadedProfile,
+            associatedObjectIds: new Set(['sub-1a']),
+            conflictingCompetencyName: blockedIn(otherCourseId),
+          }}
+        >
+          <CourseOutlineSubtree courseId={courseId} />
+          <CourseOutlineSubtree courseId={otherCourseId} />
+        </MockCompetencyAssociationsProvider>,
+      );
+
+      await screen.findByText('Blocked Section');
+      const [expandAssociatedSection, expandBlockedSection] = screen.getAllByRole('button', { name: 'Expand' });
+      await user.click(expandAssociatedSection);
+      await user.click(expandBlockedSection);
+
+      const associatedRow = screen.getByRole('button', { name: 'Subsection 1A (graded)' });
+      expect(associatedRow).toBeEnabled();
+      expect(associatedRow).toHaveAttribute('data-associated', 'true');
+      expect(tooltipWrapperOf(associatedRow)).toBeNull();
+      const blockedRow = screen.getByRole('button', { name: 'Blocked Subsection' });
+      expect(blockedRow).toBeDisabled();
+      expect(rowBoxOf(blockedRow)).toHaveAttribute('data-associated', 'false');
+      expect(tooltipWrapperOf(blockedRow)).not.toBeNull();
+    });
+
+    it('hides the control instead of disabling it when the course is not writable', async () => {
+      const user = userEvent.setup();
+      axiosMock.onGet(outlineApiUrl).reply(200, mixedOutline);
+      renderSubtree({ canEditCourse: () => false, conflictingCompetencyName: blockedIn(courseId) });
+
+      await user.click((await screen.findAllByRole('button', { name: 'Expand' }))[0]);
+
+      const row = screen.getByText('Subsection 1A (graded)').closest(
+        '.course-search-browse__subsection',
+      ) as HTMLElement;
+      expect(row.tagName).toBe('DIV');
+      expect(tooltipWrapperOf(row)).toBeNull();
+      expect(screen.queryByRole('button', { name: /Subsection 1A/ })).not.toBeInTheDocument();
+    });
+  });
 });
