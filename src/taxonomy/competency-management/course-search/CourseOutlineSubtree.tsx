@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from 'react';
 
+import classNames from 'classnames';
 import { useIntl } from '@edx/frontend-platform/i18n';
 import { Button, Icon, IconButton } from '@openedx/paragon';
 import {
@@ -22,6 +23,102 @@ export interface CourseOutlineSubtreeProps {
   courseId: string;
 }
 
+const SUBSECTION_ROW_CLASS_NAME = 'course-search-browse__subsection d-flex align-items-center justify-content-between';
+
+interface SubsectionPillProps {
+  competencyExternalId: string | null;
+  isAssociated: boolean;
+  isBlocked?: boolean;
+}
+
+/**
+ * Pill showing the competency's external ID: filled once the subsection is
+ * associated, dashed while it can still be. Screen readers skip the pill and
+ * read a text label instead. The pill is grey in a course that another
+ * competency blocks, and drops its divider and action icon there. Elsewhere
+ * the action icon is decorative in both states (add is the row's own click,
+ * remove is out of scope).
+ */
+const SubsectionPill = ({ competencyExternalId, isAssociated, isBlocked = false }: SubsectionPillProps) => {
+  const intl = useIntl();
+
+  return (
+    <span
+      className={classNames('course-search-browse__subsection-pill', {
+        'course-search-browse__subsection-pill--applied': isAssociated,
+        'course-search-browse__subsection-pill--available': !isAssociated,
+        'course-search-browse__subsection-pill--blocked': isBlocked,
+      })}
+    >
+      {(isAssociated || isBlocked) && competencyExternalId && (
+        <span className="sr-only">
+          {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
+        </span>
+      )}
+      <CompetencyIcon aria-hidden="true" />
+      {competencyExternalId && (
+        <span className="course-search-browse__subsection-pill-id" aria-hidden="true">
+          {competencyExternalId}
+        </span>
+      )}
+      {!isBlocked && (
+        <>
+          <span className="course-search-browse__subsection-pill-divider" aria-hidden="true" />
+          <Icon
+            src={isAssociated ? Cancel : AddCircle}
+            size="xs"
+            className="course-search-browse__subsection-pill-action"
+            aria-hidden="true"
+          />
+        </>
+      )}
+    </span>
+  );
+};
+
+interface BlockedSubsectionRowProps {
+  displayName: string;
+  isAssociated: boolean;
+  competencyExternalId: string | null;
+  conflictingCompetencyName: string;
+}
+
+/**
+ * Row for a graded subsection in a course that another competency blocks (see
+ * `SubsectionRow` for when that happens). The subsection title is a disabled
+ * button and the competency's pill is grey. Hovering or focusing the pill
+ * shows a tooltip naming the competency that blocks the course. An already
+ * associated subsection keeps its filled pill.
+ */
+const BlockedSubsectionRow = ({
+  displayName,
+  isAssociated,
+  competencyExternalId,
+  conflictingCompetencyName,
+}: BlockedSubsectionRowProps) => {
+  const intl = useIntl();
+
+  return (
+    <div
+      className={`${SUBSECTION_ROW_CLASS_NAME} course-search-browse__subsection--blocked`}
+      data-associated={isAssociated}
+    >
+      <Button variant="tertiary" type="button" disabled className="course-search-browse__subsection-title">
+        {displayName}
+      </Button>
+      <DisabledControlTooltip
+        tooltip={intl.formatMessage(messages.hierarchyConflictTooltip, { competencyName: conflictingCompetencyName })}
+        placement="left"
+        variant="light"
+        className="course-search-browse__subsection-pill-tooltip-wrapper"
+        tooltipClassName="course-search-browse-blocked-tooltip"
+      >
+        <SubsectionPill competencyExternalId={competencyExternalId} isAssociated={isAssociated} isBlocked />
+      </DisabledControlTooltip>
+    </div>
+  );
+};
+
 interface SubsectionRowProps {
   subsection: XBlock;
   courseId: string;
@@ -32,14 +129,17 @@ interface SubsectionRowProps {
  *
  * Clicking the row associates the subsection with the competency. The row is
  * non-interactive when the course can't be edited, association data is still
- * loading, or another competency blocks the course. The associated pill is
- * always shown, even when the row can't be clicked; its cancel icon is
- * decorative (removal is out of scope). Re-clicking an already-associated row
- * hits the duplicate guard inside `associateSubsection` (an informational
- * toast), not a failed request.
+ * loading, or another competency blocks the course. A competency blocks the
+ * course when it is an ancestor or descendant of this one in the taxonomy and
+ * already has associations in this course. The backend allows only one
+ * competency from each ancestor/descendant line per course, because nothing
+ * defines whether the parent's own criteria or a rollup of the child's would
+ * decide mastery. Sibling competencies don't block each other. The associated
+ * pill is always shown, even when the row can't be clicked. Re-clicking an
+ * already-associated row hits the duplicate guard inside `associateSubsection`
+ * (an informational toast), not a failed request.
  */
 const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
-  const intl = useIntl();
   const {
     associatedObjectIds,
     associateSubsection,
@@ -57,45 +157,14 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
   const canSelect = canEditCourse(courseId) && !!index && !!systemDefaultProfile;
   const conflictingCompetency = conflictingCompetencyName(courseId);
 
-  const rowClassName = 'course-search-browse__subsection d-flex align-items-center justify-content-between';
-  const pillClassName = `course-search-browse__subsection-pill course-search-browse__subsection-pill--${
-    isAssociated ? 'applied' : 'available'
-  }`;
-  const competencyIdLabel = competencyExternalId && (
-    <span className="sr-only">
-      {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
-    </span>
-  );
-  const competencyId = (
-    <>
-      <CompetencyIcon aria-hidden="true" />
-      {competencyExternalId && (
-        <span className="course-search-browse__subsection-pill-id" aria-hidden="true">
-          {competencyExternalId}
-        </span>
-      )}
-    </>
-  );
-
   if (canSelect && conflictingCompetency !== undefined) {
     return (
-      <div className={`${rowClassName} course-search-browse__subsection--blocked`} data-associated={isAssociated}>
-        <Button variant="tertiary" type="button" disabled className="course-search-browse__subsection-title">
-          {subsection.displayName}
-        </Button>
-        <DisabledControlTooltip
-          tooltip={intl.formatMessage(messages.hierarchyConflictTooltip, { competencyName: conflictingCompetency })}
-          placement="left"
-          variant="light"
-          className="course-search-browse__subsection-pill-tooltip-wrapper"
-          tooltipClassName="course-search-browse-blocked-tooltip"
-        >
-          <span className={`${pillClassName} course-search-browse__subsection-pill--blocked`}>
-            {competencyIdLabel}
-            {competencyId}
-          </span>
-        </DisabledControlTooltip>
-      </div>
+      <BlockedSubsectionRow
+        displayName={subsection.displayName}
+        isAssociated={isAssociated}
+        competencyExternalId={competencyExternalId}
+        conflictingCompetencyName={conflictingCompetency}
+      />
     );
   }
 
@@ -103,24 +172,14 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
     <>
       <span>{subsection.displayName}</span>
       {(isAssociated || canSelect) && (
-        <span className={pillClassName}>
-          {isAssociated && competencyIdLabel}
-          {competencyId}
-          <span className="course-search-browse__subsection-pill-divider" aria-hidden="true" />
-          <Icon
-            src={isAssociated ? Cancel : AddCircle}
-            size="xs"
-            className="course-search-browse__subsection-pill-action"
-            aria-hidden="true"
-          />
-        </span>
+        <SubsectionPill competencyExternalId={competencyExternalId} isAssociated={isAssociated} />
       )}
     </>
   );
 
   if (!canSelect) {
     return (
-      <div className={rowClassName} data-associated={isAssociated}>
+      <div className={SUBSECTION_ROW_CLASS_NAME} data-associated={isAssociated}>
         {rowContent}
       </div>
     );
@@ -131,7 +190,7 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
       variant="tertiary"
       type="button"
       block
-      className={rowClassName}
+      className={SUBSECTION_ROW_CLASS_NAME}
       data-associated={isAssociated}
       disabled={isDeletingGroup || isLoadingAssociations}
       onClick={() => associateSubsection(subsection.id, courseId)}
