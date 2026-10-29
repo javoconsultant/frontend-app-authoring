@@ -1,7 +1,7 @@
-import { useId } from 'react';
 import { useIntl } from '@edx/frontend-platform/i18n';
-import { Button, OverlayTrigger, Tooltip } from '@openedx/paragon';
+import { Button } from '@openedx/paragon';
 import { Add } from '@openedx/paragon/icons';
+import DisabledControlTooltip from '../DisabledControlTooltip';
 import messages from './messages';
 
 export interface AddControlProps {
@@ -12,13 +12,9 @@ export interface AddControlProps {
   disabled: boolean;
 }
 
-/** The "+ Rule" and "+ Rule Group" control, centered between two connector lines.
- * A disabled button fires no hover or focus events, so the tooltip hangs off a
- * focusable wrapper span instead.
- */
+/** The "+ Rule" and "+ Rule Group" control, centered between two connector lines. */
 const AddControl = ({ label, onClick, disabled }: AddControlProps) => {
   const intl = useIntl();
-  const tooltipId = useId();
 
   const button = (
     <Button
@@ -38,12 +34,12 @@ const AddControl = ({ label, onClick, disabled }: AddControlProps) => {
       <span className="add-control__line" aria-hidden="true" />
       {disabled ?
         (
-          <OverlayTrigger
-            placement="top"
-            overlay={<Tooltip id={tooltipId}>{intl.formatMessage(messages.addControlDisabledTooltip)}</Tooltip>}
+          <DisabledControlTooltip
+            tooltip={intl.formatMessage(messages.addControlDisabledTooltip)}
+            className="add-control__button-wrapper"
           >
-            <span className="add-control__button-wrapper" tabIndex={0}>{button}</span>
-          </OverlayTrigger>
+            {button}
+          </DisabledControlTooltip>
         ) :
         button}
       <span className="add-control__line" aria-hidden="true" />

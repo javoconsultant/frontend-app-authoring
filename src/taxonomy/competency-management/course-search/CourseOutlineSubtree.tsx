@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from 'react';
 
+import classNames from 'classnames';
 import { useIntl } from '@edx/frontend-platform/i18n';
 import {
   Badge,
@@ -19,12 +20,106 @@ import { useCourseOutlineIndex } from '@src/course-outline/data';
 import type { XBlock } from '@src/data/types';
 import { LoadingSpinner } from '@src/generic/Loading';
 import { useCompetencyAssociations } from '../CompetencyAssociationsContext';
+import DisabledControlTooltip from '../DisabledControlTooltip';
 import rootMessages from '../messages';
 import messages from './messages';
 
 export interface CourseOutlineSubtreeProps {
   courseId: string;
 }
+
+const SUBSECTION_ROW_CLASS_NAME = 'course-search-browse__subsection d-flex align-items-center justify-content-between';
+
+/** Check mark on a subsection that is already associated with the competency. */
+const AssociatedIcon = () => (
+  <Icon
+    src={CheckCircle}
+    size="xs"
+    className="course-search-browse__subsection-associated-icon"
+    aria-hidden="true"
+  />
+);
+
+interface CompetencyIdBadgeProps {
+  competencyExternalId: string | null;
+  isBlocked?: boolean;
+}
+
+/**
+ * Pill showing the competency's external ID. Screen readers skip the pill and
+ * read a text label instead. The pill is grey in a course that another
+ * competency blocks, and blue otherwise.
+ */
+const CompetencyIdBadge = ({ competencyExternalId, isBlocked = false }: CompetencyIdBadgeProps) => {
+  const intl = useIntl();
+
+  return (
+    <>
+      {competencyExternalId && (
+        <span className="sr-only">
+          {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
+        </span>
+      )}
+      <Badge
+        variant={isBlocked ? 'secondary' : 'info'}
+        pill
+        className={classNames('course-search-browse__subsection-badge', {
+          'course-search-browse__subsection-badge--blocked': isBlocked,
+        })}
+        aria-hidden="true"
+      >
+        <Icon src={AdsClick} size="sm" />
+        {competencyExternalId}
+      </Badge>
+    </>
+  );
+};
+
+interface BlockedSubsectionRowProps {
+  displayName: string;
+  isAssociated: boolean;
+  competencyExternalId: string | null;
+  conflictingCompetencyName: string;
+}
+
+/**
+ * Row for a graded subsection in a course that another competency blocks (see
+ * `SubsectionRow` for when that happens). The subsection title is a disabled
+ * button and the competency ID badge is grey. Hovering or focusing the badge
+ * shows a tooltip naming the competency that blocks the course. An already
+ * associated subsection keeps its check mark.
+ */
+const BlockedSubsectionRow = ({
+  displayName,
+  isAssociated,
+  competencyExternalId,
+  conflictingCompetencyName,
+}: BlockedSubsectionRowProps) => {
+  const intl = useIntl();
+
+  return (
+    <div
+      className={`${SUBSECTION_ROW_CLASS_NAME} course-search-browse__subsection--blocked`}
+      data-associated={isAssociated}
+    >
+      <Button variant="tertiary" type="button" disabled className="course-search-browse__subsection-title">
+        {displayName}
+      </Button>
+      <span className="course-search-browse__subsection-actions">
+        <DisabledControlTooltip
+          tooltip={intl.formatMessage(messages.hierarchyConflictTooltip, { competencyName: conflictingCompetencyName })}
+          placement="left"
+          variant="light"
+          className="course-search-browse__subsection-badge-tooltip-wrapper"
+          tooltipClassName="course-search-browse-blocked-tooltip"
+        >
+          <CompetencyIdBadge competencyExternalId={competencyExternalId} isBlocked />
+        </DisabledControlTooltip>
+        {isAssociated && <AssociatedIcon />}
+      </span>
+    </div>
+  );
+};
 
 interface SubsectionRowProps {
   subsection: XBlock;
@@ -34,22 +129,23 @@ interface SubsectionRowProps {
 /**
  * One row for a single graded subsection.
  *
- * Renders a button that calls `associateSubsection` when clicked, unless
- * `canEditCourse(courseId)` is false or the association data (`index`,
- * `systemDefaultProfile`) isn't loaded yet, in which case it renders the same
- * content as a non-interactive `div`. The already-associated badge and
- * marker icon show regardless of `canEditCourse`, so a view-only course
- * still shows what's associated. Re-clicking an
- * already-associated row hits the duplicate guard inside
- * `associateSubsection` (an informational toast), not a failed request.
+ * Clicking the row associates the subsection with the competency. The row is
+ * non-interactive when the course can't be edited, association data is still
+ * loading, or another competency blocks the course. A competency blocks the
+ * course when it is an ancestor or descendant of this one in the taxonomy and
+ * already has associations in this course. The backend allows only one
+ * competency from each ancestor/descendant line per course, because nothing
+ * defines whether the parent's own criteria or a rollup of the child's would
+ * decide mastery. Sibling competencies don't block each other. The associated
+ * state is always shown, even when the row can't be clicked.
  */
 const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
-  const intl = useIntl();
   const {
     associatedObjectIds,
     associateSubsection,
     canEditCourse,
     competencyExternalId,
+    conflictingCompetencyName,
     index,
     systemDefaultProfile,
     isDeletingGroup,
@@ -59,38 +155,25 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
   // (declared on the shared `XBlockBase` type but always `undefined` here).
   const isAssociated = associatedObjectIds.has(subsection.id);
   const canSelect = canEditCourse(courseId) && !!index && !!systemDefaultProfile;
+  const conflictingCompetency = conflictingCompetencyName(courseId);
 
-  const rowClassName = 'course-search-browse__subsection d-flex align-items-center justify-content-between';
+  if (canSelect && conflictingCompetency !== undefined) {
+    return (
+      <BlockedSubsectionRow
+        displayName={subsection.displayName}
+        isAssociated={isAssociated}
+        competencyExternalId={competencyExternalId}
+        conflictingCompetencyName={conflictingCompetency}
+      />
+    );
+  }
+
   const rowContent = (
     <>
       <span>{subsection.displayName}</span>
       <span className="course-search-browse__subsection-actions">
-        {isAssociated && (
-          <>
-            {competencyExternalId && (
-              <>
-                <span className="sr-only">
-                  {intl.formatMessage(rootMessages.competencyIdAccessibleLabel, { externalId: competencyExternalId })}
-                </span>
-                <Badge
-                  variant="info"
-                  pill
-                  className="course-search-browse__subsection-badge"
-                  aria-hidden="true"
-                >
-                  <Icon src={AdsClick} size="xs" />
-                  {competencyExternalId}
-                </Badge>
-              </>
-            )}
-            <Icon
-              src={CheckCircle}
-              size="xs"
-              className="course-search-browse__subsection-associated-icon"
-              aria-hidden="true"
-            />
-          </>
-        )}
+        {isAssociated && competencyExternalId && <CompetencyIdBadge competencyExternalId={competencyExternalId} />}
+        {isAssociated && <AssociatedIcon />}
         {canSelect && (
           <Icon
             src={AddCircleOutline}
@@ -105,7 +188,7 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
 
   if (!canSelect) {
     return (
-      <div className={rowClassName} data-associated={isAssociated}>
+      <div className={SUBSECTION_ROW_CLASS_NAME} data-associated={isAssociated}>
         {rowContent}
       </div>
     );
@@ -116,7 +199,7 @@ const SubsectionRow = ({ subsection, courseId }: SubsectionRowProps) => {
       variant="tertiary"
       type="button"
       block
-      className={rowClassName}
+      className={SUBSECTION_ROW_CLASS_NAME}
       data-associated={isAssociated}
       disabled={isDeletingGroup || isLoadingAssociations}
       onClick={() => associateSubsection(subsection.id, courseId)}
