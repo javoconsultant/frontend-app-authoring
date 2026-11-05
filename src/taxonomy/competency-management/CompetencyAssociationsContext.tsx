@@ -23,6 +23,7 @@ import { useToastContext } from '@src/generic/toast-context';
 
 import {
   competencyQueryKeys,
+  useCompetencyBlockedCourses,
   useCompetencyCriteriaGroups,
   useCourseTaggingPermissions,
   useCreateCompetencyCriterion,
@@ -156,6 +157,11 @@ export interface CompetencyAssociationsContextValue {
    * check.
    */
   canEditCourse: (courseId: string) => boolean;
+  /** The related competency that blocks the given listed course, or
+   * `undefined` when the course is not blocked or the lookup is still
+   * loading or failed, so selection fails open (the backend still rejects).
+   */
+  conflictingCompetencyName: (courseId: string) => string | undefined;
   groupsQuery: UseQueryResult<CompetencyCriteriaGroupsResponse>;
   profileQuery: UseQueryResult<CompetencyRuleProfile>;
   /** True until both `groupsQuery` and `profileQuery` have data, which
@@ -332,6 +338,7 @@ export const CompetencyAssociationsProvider = ({
   }, []);
 
   const groupsQuery = useCompetencyCriteriaGroups(tagId, displayedCourseKeys);
+  const blockedCoursesQuery = useCompetencyBlockedCourses(tagId, displayedCourseKeys);
   const profileQuery = useDefaultCompetencyRuleProfile();
   const createCriterion = useCreateCompetencyCriterion();
   const updateGroupOperatorMutation = useUpdateCompetencyCriteriaGroupOperator();
@@ -497,6 +504,11 @@ export const CompetencyAssociationsProvider = ({
   const canEditCourse = useCallback(
     (courseId: string) => permissionsByCourseId[courseId] ?? false,
     [permissionsByCourseId],
+  );
+
+  const conflictingCompetencyName = useCallback(
+    (courseId: string) => blockedCoursesQuery.data?.find((row) => row.courseKey === courseId)?.conflictingTagValue,
+    [blockedCoursesQuery.data],
   );
 
   const associateSubsection = useCallback((objectId: string, courseId: string) => {
@@ -724,6 +736,7 @@ export const CompetencyAssociationsProvider = ({
     keyboardFocusRequest,
     consumeKeyboardFocusRequest,
     canEditCourse,
+    conflictingCompetencyName,
     groupsQuery,
     profileQuery,
     isLoadingAssociations,
@@ -758,6 +771,7 @@ export const CompetencyAssociationsProvider = ({
     keyboardFocusRequest,
     consumeKeyboardFocusRequest,
     canEditCourse,
+    conflictingCompetencyName,
     groupsQuery,
     profileQuery,
     isLoadingAssociations,

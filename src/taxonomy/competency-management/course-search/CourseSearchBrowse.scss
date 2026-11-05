@@ -258,6 +258,23 @@
     justify-content: space-between;
   }
 
+  // A blocked row's title is a disabled button inside the row's `div`, so it
+  // drops its own button box and keeps the row's text color.
+  &__subsection-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    font: inherit;
+    text-align: left;
+    justify-content: flex-start;
+
+    &:disabled {
+      opacity: 1;
+      color: inherit;
+    }
+  }
+
   // Target icon | competency ID | divider | action icon. The action icon is
   // decorative in both states (add is the row's own click, remove is out of
   // scope), so the pill carries no interaction of its own.
@@ -285,6 +302,18 @@
       border-style: dashed;
       color: var(--pgn-color-info-600);
     }
+
+    // In a course another competency blocks: the same shape in grey, so an
+    // associated subsection stays filled and an unassociated one dashed.
+    &--blocked {
+      border-color: var(--pgn-color-gray-500);
+      color: var(--pgn-color-gray-500);
+
+      &.course-search-browse__subsection-pill--applied {
+        background-color: var(--pgn-color-gray-500);
+        color: var(--pgn-color-white);
+      }
+    }
   }
 
   &__subsection-pill-id {
@@ -298,4 +327,16 @@
     margin: -2px 0 -3px;
     background-color: currentcolor;
   }
+
+  // Focusable wrapper `DisabledControlTooltip` hangs a blocked pill's tooltip
+  // off; rounded so its focus ring follows the pill.
+  &__subsection-pill-tooltip-wrapper {
+    display: inline-flex;
+    flex-shrink: 0;
+    border-radius: 4rem;
+  }
+}
+
+.course-search-browse-blocked-tooltip {
+  --pgn-size-tooltip-max-width: 400px;
 }

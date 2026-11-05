@@ -35,6 +35,7 @@ export const buildMockCompetencyAssociationsContextValue = (
   consumeKeyboardFocusRequest: jest.fn(),
   updateRuleScore: jest.fn().mockResolvedValue(undefined),
   canEditCourse: () => true,
+  conflictingCompetencyName: () => undefined,
   groupsQuery: {
     isLoading: false,
     isError: false,
