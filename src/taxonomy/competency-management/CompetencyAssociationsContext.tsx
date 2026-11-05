@@ -157,6 +157,10 @@ export interface CompetencyAssociationsContextValue {
    * check.
    */
   canEditCourse: (courseId: string) => boolean;
+  /** The related competency that blocks the given listed course, or
+   * `undefined` when the course is not blocked or the lookup is still
+   * loading or failed, so selection fails open (the backend still rejects).
+   */
   conflictingCompetencyName: (courseId: string) => string | undefined;
   groupsQuery: UseQueryResult<CompetencyCriteriaGroupsResponse>;
   profileQuery: UseQueryResult<CompetencyRuleProfile>;

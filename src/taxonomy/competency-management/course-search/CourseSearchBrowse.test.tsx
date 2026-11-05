@@ -1449,7 +1449,7 @@ describe('<CourseSearchBrowse /> and <CourseRow />', () => {
       await waitFor(() => expect(row).toBeDisabled());
       expect(blockedCoursesRequests()[0].params).toEqual({ course_keys: courseA.courseKey });
       await user.hover(row.closest('.course-search-browse__subsection')!.querySelector('span[tabindex="0"]')!);
-      expect(await screen.findByText(conflictTooltip)).toBeInTheDocument();
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(conflictTooltip);
     });
 
     it('keeps subsections selectable while the blocked-courses request is in flight', async () => {

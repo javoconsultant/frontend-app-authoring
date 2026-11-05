@@ -41,6 +41,7 @@ const makeCbeV1Url = (path: string): string => new URL(path, getCbeV1Endpoint())
 export const apiUrls = {
   /** GET: the course-level and bottom-tier criteria groups, plus criteria, for one competency (tag). Backs `#681`. */
   competencyCriteriaGroups: (tagId: number) => makeUrl(`${tagId}/criteria-groups/`),
+  /** GET: the paginated list of courses where a related competency blocks this one. Backs `#796`. */
   competencyBlockedCourses: (tagId: number) => makeUrl(`${tagId}/blocked-courses/`),
   /** GET: the paginated list of competency rule profiles (system-default, taxonomy, course, or
    * organization scoped - see `scopeType` on `CompetencyRuleProfile`). Backs `#773`.
@@ -71,6 +72,10 @@ export async function getCompetencyCriteriaGroups(
 
 /**
  * Get which of the given courses are blocked for a competency by the dominance rule.
+ *
+ * Reads only the first page. The backend returns at most one row per requested
+ * course and pins its page size to 100, while `courseKeys` holds one page of the
+ * course list (`PAGE_SIZE`, 10). Follow `next` if either number changes.
  */
 export async function getCompetencyBlockedCourses(
   tagId: number,

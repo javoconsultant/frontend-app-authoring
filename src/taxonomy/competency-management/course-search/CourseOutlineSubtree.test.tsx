@@ -1,6 +1,7 @@
 import { buildOutlineIndex } from '@src/course-outline/__mocks__';
 import { getCourseOutlineIndexApiUrl } from '@src/course-outline/data';
 import {
+  act,
   initializeMocks,
   render,
   screen,
@@ -430,8 +431,9 @@ describe('<CourseOutlineSubtree />', () => {
       expect(screen.getByRole('button', { name: 'Subsection 2A (graded)' })).toBeDisabled();
       const wrapper = tooltipWrapperOf(rowA)!;
       await user.hover(wrapper);
-      const tooltip = await screen.findByText(conflictTooltip);
-      expect(wrapper).toHaveAttribute('aria-describedby', tooltip.closest('[role="tooltip"]')!.id);
+      const tooltip = await screen.findByRole('tooltip');
+      expect(tooltip).toHaveTextContent(conflictTooltip);
+      expect(wrapper).toHaveAttribute('aria-describedby', tooltip.id);
     });
 
     it('disables an already-associated row in a blocked course too, keeping its marking', async () => {
@@ -458,6 +460,19 @@ describe('<CourseOutlineSubtree />', () => {
       expect(within(wrapper).getByText('EXT-042')).toHaveAttribute('aria-hidden', 'true');
       expect(within(wrapper).getByText('Competency ID: EXT-042')).toBeInTheDocument();
       expect(rowBoxOf(row).querySelector('.course-search-browse__subsection-pill-action')).toBeNull();
+    });
+
+    it('gives the focusable pill wrapper readable text when the competency has no external ID', async () => {
+      const user = userEvent.setup();
+      axiosMock.onGet(outlineApiUrl).reply(200, mixedOutline);
+      renderSubtree({ competencyExternalId: null, conflictingCompetencyName: blockedIn(courseId) });
+
+      await user.click((await screen.findAllByRole('button', { name: 'Expand' }))[0]);
+
+      const wrapper = tooltipWrapperOf(screen.getByRole('button', { name: 'Subsection 1A (graded)' })) as HTMLElement;
+      expect(within(wrapper).getByText(conflictTooltip)).toHaveClass('sr-only');
+      act(() => wrapper.focus());
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(conflictTooltip);
     });
 
     it('leaves rows enabled, with no tooltip, when only a different course is blocked', async () => {

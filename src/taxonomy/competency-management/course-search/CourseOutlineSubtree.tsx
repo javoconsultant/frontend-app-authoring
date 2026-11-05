@@ -88,7 +88,9 @@ interface BlockedSubsectionRowProps {
  * `SubsectionRow` for when that happens). The subsection title is a disabled
  * button and the competency's pill is grey. Hovering or focusing the pill
  * shows a tooltip naming the competency that blocks the course. An already
- * associated subsection keeps its filled pill.
+ * associated subsection keeps its filled pill. With no external ID the pill
+ * has no readable text, so the wrapper (the row's only focus stop) carries the
+ * tooltip text for screen readers instead.
  */
 const BlockedSubsectionRow = ({
   displayName,
@@ -97,6 +99,7 @@ const BlockedSubsectionRow = ({
   conflictingCompetencyName,
 }: BlockedSubsectionRowProps) => {
   const intl = useIntl();
+  const tooltip = intl.formatMessage(messages.hierarchyConflictTooltip, { competencyName: conflictingCompetencyName });
 
   return (
     <div
@@ -107,13 +110,14 @@ const BlockedSubsectionRow = ({
         {displayName}
       </Button>
       <DisabledControlTooltip
-        tooltip={intl.formatMessage(messages.hierarchyConflictTooltip, { competencyName: conflictingCompetencyName })}
+        tooltip={tooltip}
         placement="left"
         variant="light"
         className="course-search-browse__subsection-pill-tooltip-wrapper"
         tooltipClassName="course-search-browse-blocked-tooltip"
       >
         <SubsectionPill competencyExternalId={competencyExternalId} isAssociated={isAssociated} isBlocked />
+        {!competencyExternalId && <span className="sr-only">{tooltip}</span>}
       </DisabledControlTooltip>
     </div>
   );

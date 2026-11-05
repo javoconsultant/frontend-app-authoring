@@ -63,13 +63,18 @@ export const useCompetencyCriteriaGroups = (tagId: number | undefined, courseKey
   })
 );
 
-/** Load which of the listed courses a parent or child competency already claims .*/
+/**
+ * Load which of the listed courses a parent or child competency already claims (`#796`).
+ * Skipped until a competency is selected and at least one course is listed.
+ */
 export const useCompetencyBlockedCourses = (tagId: number | undefined, courseKeys: string[] | undefined) => (
   useQuery({
     queryKey: competencyQueryKeys.competencyBlockedCourses(tagId, courseKeys),
     queryFn: tagId !== undefined && courseKeys?.length
       ? () => api.getCompetencyBlockedCourses(tagId, courseKeys)
       : skipToken,
+    // The app's one-hour `staleTime` would otherwise serve a cached answer on a revisit, and
+    // the answer changes through writes made under another competency, which nothing here invalidates.
     gcTime: 0,
   })
 );
